@@ -9,14 +9,28 @@ URLS = {
 
 
 class AcousticModel(nn.Module):
+    """Unit-to-Mel acoustic model, SegFC-Conv-AR(SegFC-Res(LSTM)-Proj)"""
     def __init__(self, discrete: bool = False, upsample: bool = True):
+        """
+        Args:
+            discrete - Whether input is discrete unit or not (affect only Encoder embedding ON/OFF)
+            upsample -
+        """
         super().__init__()
+        # [Emb-]SegFC-Conv
         self.encoder = Encoder(discrete, upsample)
+        # AR(SegFC-Res(LSTM)-Proj)
         self.decoder = Decoder()
 
-    def forward(self, x: torch.Tensor, mels: torch.Tensor) -> torch.Tensor:
-        x = self.encoder(x)
-        return self.decoder(x, mels)
+    def forward(self, unit_series: torch.Tensor, mels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            unit_series - Unit series
+            mels - Ground Truth mel-spectrograms for teacher-forcing
+        Returns - Mel-spectrograms
+        """
+        latent_series = self.encoder(unit_series)
+        return self.decoder(latent_series, mels)
 
     @torch.inference_mode()
     def generate(self, x: torch.Tensor) -> torch.Tensor:
@@ -25,21 +39,26 @@ class AcousticModel(nn.Module):
 
 
 class Encoder(nn.Module):
+    """Unit-to-Latent FeedForward Encoder, [Emb-]SegFC-Conv"""
     def __init__(self, discrete: bool = False, upsample: bool = True):
         super().__init__()
+        dim_z = 512
+
         self.embedding = nn.Embedding(100 + 1, 256) if discrete else None
+        # (SegFC256-ReLU-DO0.5)x2
         self.prenet = PreNet(256, 256, 256)
+        # (Conv-ReLU-IN)-ConvT-(Conv-ReLU-IN)x2
         self.convs = nn.Sequential(
-            nn.Conv1d(256, 512, 5, 1, 2),
+            nn.Conv1d(256, dim_z, 5, 1, 2),
             nn.ReLU(),
-            nn.InstanceNorm1d(512),
-            nn.ConvTranspose1d(512, 512, 4, 2, 1) if upsample else nn.Identity(),
-            nn.Conv1d(512, 512, 5, 1, 2),
+            nn.InstanceNorm1d(dim_z),
+            nn.ConvTranspose1d(dim_z, dim_z, 4, 2, 1) if upsample else nn.Identity(),
+            nn.Conv1d(dim_z, dim_z, 5, 1, 2),
             nn.ReLU(),
-            nn.InstanceNorm1d(512),
-            nn.Conv1d(512, 512, 5, 1, 2),
+            nn.InstanceNorm1d(dim_z),
+            nn.Conv1d(dim_z, dim_z, 5, 1, 2),
             nn.ReLU(),
-            nn.InstanceNorm1d(512),
+            nn.InstanceNorm1d(dim_z),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -51,15 +70,27 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
+    """Latent-to-Mel autoregressive Decoder, AR(SegFC-Res(LSTM)-Proj)"""
     def __init__(self):
         super().__init__()
-        self.prenet = PreNet(128, 256, 256)
-        self.lstm1 = nn.LSTM(512 + 256, 768, batch_first=True)
-        self.lstm2 = nn.LSTM(768, 768, batch_first=True)
-        self.lstm3 = nn.LSTM(768, 768, batch_first=True)
-        self.proj = nn.Linear(768, 128, bias=False)
+        n_mels = 128
+        dim_z = 512
+        dim_ar = 256
+        dim_h_lstm = 768
+
+        self.prenet = PreNet(n_mels, 256, dim_ar) # (SegFC256-ReLU-DO0.5)x2
+        self.lstm1 =  nn.LSTM(dim_z + dim_ar, dim_h_lstm, batch_first=True)
+        self.lstm2 =  nn.LSTM(dim_h_lstm,     dim_h_lstm, batch_first=True)
+        self.lstm3 =  nn.LSTM(dim_h_lstm,     dim_h_lstm, batch_first=True)
+        self.proj = nn.Linear(dim_h_lstm,     n_mels, bias=False)
 
     def forward(self, x: torch.Tensor, mels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x -
+            mels - Ground Truth mel-spectrograms for teacher-forcing
+        Returns - Estimated mel-spectrograms
+        """
         mels = self.prenet(mels)
         x, _ = self.lstm1(torch.cat((x, mels), dim=-1))
         res = x
@@ -95,6 +126,7 @@ class Decoder(nn.Module):
 
 
 class PreNet(nn.Module):
+    """Encoder/Decoder PreNet, (SegFC-ReLU-DO)x2."""
     def __init__(
         self,
         input_size: int,
@@ -123,6 +155,12 @@ def _acoustic(
     pretrained: bool = True,
     progress: bool = True,
 ) -> AcousticModel:
+    """Generate AcousticModel instance.
+
+    Args:
+        name :: "hubert-discrete" | "hubert-soft" - Model name
+        upsample - (Currently always ON)
+    """
     acoustic = AcousticModel(discrete, upsample)
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(URLS[name], progress=progress)
