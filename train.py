@@ -1,3 +1,6 @@
+"""Main script of AcousticModel training."""
+
+
 import argparse
 import logging
 from pathlib import Path
@@ -37,6 +40,8 @@ INIT_METHOD = "tcp://localhost:54321"
 
 
 def train(rank, world_size, args):
+    """Train the SoftVC Acoustic model."""
+
     dist.init_process_group(
         BACKEND,
         rank=rank,
@@ -63,6 +68,7 @@ def train(rank, world_size, args):
     else:
         logger.setLevel(logging.ERROR)
 
+    # TensorBoard
     writer = SummaryWriter(log_dir) if rank == 0 else None
 
     ####################################################################################

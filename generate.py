@@ -1,3 +1,6 @@
+"""Main script of unit-to-mel inference."""
+
+
 import argparse
 
 from pathlib import Path
@@ -8,11 +11,13 @@ import torch
 
 
 def generate(args):
+    """Generate mel-spec .npy from unit .npy with Pre-trained AcousticModel."""
     print("Loading acoustic model checkpoint")
     acoustic = torch.hub.load("bshall/acoustic-model:main", f"hubert_{args.model}").cuda()
 
     print(f"Generating from {args.in_dir} -> {args.out_dir}")
     for path in tqdm(list(args.in_dir.rglob("*.npy"))):
+        # todo: bug?
         units = np.load("path")
         units_dtype = torch.long if args.model == "discrete" else torch.float
         units = torch.tensor(units, dtype=units_dtype).cuda()

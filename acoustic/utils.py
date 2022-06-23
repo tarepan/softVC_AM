@@ -24,6 +24,7 @@ class Metric:
 
 
 class LogMelSpectrogram(torch.nn.Module):
+    """Waveform-to-LogMelSpec, hop 10msec, 128-dim."""
     def __init__(self):
         super().__init__()
         self.melspctrogram = transforms.MelSpectrogram(
@@ -56,6 +57,7 @@ def save_checkpoint(
     best,
     logger,
 ):
+    """Save model/optim/step/loss in the directory."""
     state = {
         "acoustic-model": acoustic.module.state_dict(),
         "optimizer": optimizer.state_dict(),
@@ -78,6 +80,7 @@ def load_checkpoint(
     rank,
     logger,
 ):
+    """Restore model/optim/step/loss from the checkpoint."""
     logger.info(f"Loading checkpoint from {load_path}")
     checkpoint = torch.load(load_path, map_location={"cuda:0": f"cuda:{rank}"})
     acoustic.load_state_dict(checkpoint["acoustic-model"])
@@ -86,6 +89,7 @@ def load_checkpoint(
 
 
 def plot_spectrogram(spectrogram):
+    """Plot spectrogram in 2D figure."""
     fig, ax = plt.subplots(figsize=(10, 2))
     im = ax.imshow(spectrogram, aspect="auto", origin="lower", interpolation="none")
     plt.colorbar(im, ax=ax)

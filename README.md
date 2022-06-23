@@ -52,6 +52,21 @@ optional arguments:
   -h, --help       show this help message and exit
 ```
 
+### Training
+#### Preprocessing
+wave-to-mel preprocessing:  
+```bash
+python mels.py <in-dir> <out-dir>
+
+# todo: wave-to-unit preprocessing (not found in this repository)
+```
+
+#### Train
+```bash
+python train.py <dataset-dir> <checkpoint-dir>
+# python train.py <dataset-dir> <checkpoint-dir> --resume=<checkpoint-file> # Resume
+```
+
 ## Links
 
 - [Soft-VC repo](https://github.com/bshall/soft-vc)

@@ -8,6 +8,11 @@ from torch.nn.utils.rnn import pad_sequence
 
 class MelDataset(Dataset):
     def __init__(self, root, train=True, discrete=False):
+        """
+        Prerequisites:
+            - log-mel-spectrogram .npy under f'{root}/mels' directory
+            - unit series .npy under f'{root}/{'discrete'|'soft'}' directory
+        """
         self.discrete = discrete
         self.mels_dir = root / "mels"
         self.units_dir = root / "discrete" if discrete else root / "soft"
@@ -29,14 +34,20 @@ class MelDataset(Dataset):
 
         length = 2 * units.shape[0]
 
+        # log-mel-spectrogram
         mel = torch.from_numpy(mel[:length, :])
         mel = F.pad(mel, (0, 0, 1, 0))
+
+        # unit series
         units = torch.from_numpy(units)
         if self.discrete:
             units = units.long()
+
         return mel, units
 
     def pad_collate(self, batch):
+        """collate_fn used in the dataloader."""
+
         mels, units = zip(*batch)
 
         mels, units = list(mels), list(units)
