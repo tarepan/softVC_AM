@@ -16,6 +16,7 @@ def generate(args):
     acoustic = torch.hub.load("bshall/acoustic-model:main", f"hubert_{args.model}").cuda()
 
     print(f"Generating from {args.in_dir} -> {args.out_dir}")
+    # All **/*.npy under the directory
     for path in tqdm(list(args.in_dir.rglob("*.npy"))):
         # todo: bug?
         units = np.load("path")
@@ -43,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "in_dir",
         metavar="in-dir",
-        help="path to the dataset directory.",
+        help="path to the directory under which source log-mel-spec .npy exist.",
         type=Path,
     )
     parser.add_argument(
