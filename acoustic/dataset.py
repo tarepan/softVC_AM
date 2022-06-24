@@ -1,5 +1,6 @@
-import numpy as np
+from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
@@ -7,8 +8,12 @@ from torch.nn.utils.rnn import pad_sequence
 
 
 class MelDataset(Dataset):
-    def __init__(self, root, train=True, discrete=False):
+    def __init__(self, root: Path, train: bool = True, discrete: bool = False):
         """
+        Args:
+            root - Data root path, under which data exist
+            train - Whether train mode or not
+            discrete - Whether discrete unit or not (default: soft)
         Prerequisites:
             - log-mel-spectrogram .npy under f'{root}/mels' directory
             - unit series .npy under f'{root}/{'discrete'|'soft'}' directory

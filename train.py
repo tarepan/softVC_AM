@@ -110,6 +110,8 @@ def train(rank, world_size, args):
     validation_dataset = MelDataset(
         root=args.dataset_dir,
         train=False,
+        # todo: No discrete flag. Is this bug?
+        # discrete=args.discrete,
     )
     validation_loader = DataLoader(
         validation_dataset,
@@ -312,6 +314,12 @@ if __name__ == "__main__":
         help="path to the checkpoint to resume from.",
         type=Path,
     )
+    # todo: args.discrete not found. Is this bug?
+    # parser.add_argument(
+    #     "--discrete",
+    #     action='store_true',
+    #     help="Whether discrete mode or not.",
+    # )
     args = parser.parse_args()
 
     world_size = torch.cuda.device_count()
