@@ -22,15 +22,16 @@ class AcousticModel(nn.Module):
         # AR(SegFC-Res(LSTM)-Proj)
         self.decoder = Decoder()
 
-    def forward(self, unit_series: torch.Tensor, mels: torch.Tensor) -> torch.Tensor:
+    def forward(self, unit_1_T: torch.Tensor, mspc_0_T_1: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            unit_series - Unit series
-            mels - Ground Truth mel-spectrograms for teacher-forcing, from t=0 to t=T-1
-        Returns - Mel-spectrograms, from t=1 to t=T
+            unit_1_T   :: (B, T_unit,          ?)    - Input Unit series, from t=1 to t=T
+            mspc_0_T_1 :: (B, T_mspc=2*T_unit, Freq) - Ground Truth mel-spectrograms for teacher-forcing, from t=0 to t=T-1
+        Returns :: (B, T_mspc, Freq) - Estimated mel-spectrograms, from t=1 to t=T
         """
-        latent_series = self.encoder(unit_series)
-        return self.decoder(latent_series, mels)
+        latent_1_T = self.encoder(unit_1_T)
+        mspc_1_T_estim = self.decoder(latent_1_T, mspc_0_T_1)
+        return mspc_1_T_estim
 
     @torch.inference_mode()
     def generate(self, x: torch.Tensor) -> torch.Tensor:
@@ -91,22 +92,22 @@ class Decoder(nn.Module):
         self.lstm3 =  nn.LSTM(dim_h_lstm,     dim_h_lstm, batch_first=True)
         self.proj = nn.Linear(dim_h_lstm,     n_mels, bias=False)
 
-    def forward(self, x: torch.Tensor, mels: torch.Tensor) -> torch.Tensor:
+    def forward(self, latent_1_T: torch.Tensor, mspc_0_T_1: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x -
-            mels - Ground Truth mel-spectrograms for teacher-forcing, from t=0 to t=T-1
+            latent_1_T :: (B, T_f=T_mspc, Feat) - Latent series, from t=1 to t=T
+            mspc_0_T_1 :: (B, T_mspc, Freq)     - Ground Truth mel-spectrograms for teacher-forcing, from t=0 to t=T-1
         Returns - Estimated mel-spectrograms, from t=1 to t=T
         """
-        mels = self.prenet(mels)
-        x, _ = self.lstm1(torch.cat((x, mels), dim=-1))
-        res = x
-        x, _ = self.lstm2(x)
-        x = res + x
-        res = x
-        x, _ = self.lstm3(x)
-        x = res + x
-        return self.proj(x)
+        mspc_0_T_1 = self.prenet(mspc_0_T_1)
+        mspc_1_T_estim, _ = self.lstm1(torch.cat((latent_1_T, mspc_0_T_1), dim=-1))
+        res = mspc_1_T_estim
+        mspc_1_T_estim, _ = self.lstm2(mspc_1_T_estim)
+        mspc_1_T_estim = res + mspc_1_T_estim
+        res = mspc_1_T_estim
+        mspc_1_T_estim, _ = self.lstm3(mspc_1_T_estim)
+        mspc_1_T_estim = res + mspc_1_T_estim
+        return self.proj(mspc_1_T_estim)
 
     @torch.inference_mode()
     def generate(self, xs: torch.Tensor) -> torch.Tensor:

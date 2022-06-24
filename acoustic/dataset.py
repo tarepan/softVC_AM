@@ -25,33 +25,48 @@ class MelDataset(Dataset):
         return len(self.metadata)
 
     def __getitem__(self, index):
+        """
+        Returns:
+            mspc_m1_T :: (T_mspc=2*T_unit+1, Freq) - Mel-spectrogram, from t=-1 (zero padded) to t=T
+            unit_0_T  :: (T_unit,            ?)    - Unit series, from t=0 to t=T
+        """
         path = self.metadata[index]
         mel_path = self.mels_dir / path
         units_path = self.units_dir / path
 
-        mel = np.load(mel_path.with_suffix(".npy")).T
-        units = np.load(units_path.with_suffix(".npy"))
+        mspc_series = np.load(mel_path.with_suffix(".npy")).T
+        unit_0_T = np.load(units_path.with_suffix(".npy"))
 
-        length = 2 * units.shape[0]
+        length = 2 * unit_0_T.shape[0]
 
-        # log-mel-spectrogram
-        mel = torch.from_numpy(mel[:length, :])
-        mel = F.pad(mel, (0, 0, 1, 0))
+        # log-mel-spectrogram :: (T_mspc = 2*T_unit+1, Freq)
+        mspc_0_T = torch.from_numpy(mspc_series[:length, :])
+        ## Zero padding of time for AR input :: (T_mspc = 2*T_unit, Freq) -> (T_mspc = 2*T_unit+1, Freq)
+        mspc_m1_T = F.pad(mspc_0_T, (0, 0, 1, 0))
 
-        # unit series
-        units = torch.from_numpy(units)
+        # unit series :: (T_unit, Feat) ?
+        unit_0_T = torch.from_numpy(unit_0_T)
         if self.discrete:
-            units = units.long()
+            unit_0_T = unit_0_T.long()
 
-        return mel, units
+        return mspc_m1_T, unit_0_T
 
     def pad_collate(self, batch):
-        """collate_fn used in the dataloader."""
+        """collate_fn used in the dataloader.
+
+        Make padding for batching.
+        Returns:
+            mels          :: (B, max(T_mspc)=2*max(T_unit), Freq) - t=-1 (zero padded) ~ t=T
+            mels_lengths
+            units         :: (B, max(T_unit),               Feat) ? - t=0 ~ t=T
+            units_lengths
+        """
 
         mels, units = zip(*batch)
 
         mels, units = list(mels), list(units)
 
+        # mel[0] is used only for AR input, not for output/loss
         mels_lengths = torch.tensor([x.size(0) - 1 for x in mels])
         units_lengths = torch.tensor([x.size(0) for x in units])
 

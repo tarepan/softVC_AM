@@ -24,7 +24,7 @@ class Metric:
 
 
 class LogMelSpectrogram(torch.nn.Module):
-    """Waveform-to-LogMelSpec, hop 10msec, 128-dim."""
+    """Waveform-to-LogMelSpec, hop 10msec, 128-dim, same/center padding."""
     def __init__(self):
         super().__init__()
         self.melspctrogram = transforms.MelSpectrogram(
@@ -41,8 +41,13 @@ class LogMelSpectrogram(torch.nn.Module):
         )
 
     def forward(self, wav):
-        padding = (1024 - 160) // 2
+        # `win_length - hop_length`, keep frame-block correspondence (~= "same" padding)
+        len_pad_same = 1024 - 160
+        # pad_L == pad_R, so centered padding
+        padding = len_pad_same // 2
         wav = F.pad(wav, (padding, padding), "reflect")
+
+        # wave-to-logmelspec
         mel = self.melspctrogram(wav)
         logmel = torch.log(torch.clamp(mel, min=1e-5))
         return logmel

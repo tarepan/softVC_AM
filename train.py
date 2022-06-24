@@ -166,7 +166,10 @@ def train(rank, world_size, args):
         acoustic.train()
         epoch_loss.reset()
 
+        # padded_specs, len_specs, padded_unit_series, len_units
+        # mels - mels[:, 0] is zeros for AR input
         for mels, mels_lengths, units, units_lengths in train_loader:
+
             mels, mels_lengths = mels.to(rank), mels_lengths.to(rank)
             units, units_lengths = units.to(rank), units_lengths.to(rank)
 
@@ -176,10 +179,17 @@ def train(rank, world_size, args):
 
             optimizer.zero_grad()
 
-            mels_ = acoustic(units, mels[:, :-1, :])
+            # mel_0 ~ mel_{T-1}
+            mel_0_T_1 = mels[:, :-1]
+            # mel_1 ~ mel_T
+            mel_1_T   = mels[:, 1:]
 
-            loss = F.l1_loss(mels_, mels[:, 1:, :], reduction="none")
-            loss = torch.sum(loss, dim=(1, 2)) / (mels_.size(-1) * mels_lengths)
+            # AR input t=0 ~ t=T-1 -> Estimated output t=1 ~ t=T
+            mel_1_T_estim = acoustic(units, mel_0_T_1)
+
+            # todo: No padding-related masking...?
+            loss = F.l1_loss(mel_1_T_estim, mel_1_T, reduction="none")
+            loss = torch.sum(loss, dim=(1, 2)) / (mel_1_T_estim.size(-1) * mels_lengths)
             loss = torch.mean(loss)
 
             loss.backward()
@@ -214,8 +224,9 @@ def train(rank, world_size, args):
                     mels, units = mels.to(rank), units.to(rank)
 
                     with torch.no_grad():
-                        mels_ = acoustic(units, mels[:, :-1, :])
-                        loss = F.l1_loss(mels_, mels[:, 1:, :])
+                        mel_0_T_1, mel_1_T = mels[:, :-1], mels[:, 1:]
+                        mel_1_T_estim = acoustic(units, mel_0_T_1)
+                        loss = F.l1_loss(mel_1_T_estim, mel_1_T)
 
                     ####################################################################
                     # Update validation metrics and log generated mels
@@ -227,7 +238,7 @@ def train(rank, world_size, args):
                         writer.add_figure(
                             f"generated/mel_{i}",
                             plot_spectrogram(
-                                mels_.squeeze().transpose(0, 1).cpu().numpy()
+                                mel_1_T_estim.squeeze().transpose(0, 1).cpu().numpy()
                             ),
                             global_step,
                         )
