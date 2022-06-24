@@ -101,7 +101,7 @@ def train(rank, world_size, args):
         batch_size=BATCH_SIZE,
         sampler=train_sampler,
         collate_fn=train_dataset.pad_collate,
-        num_workers=8,
+        num_workers=1,
         pin_memory=True,
         shuffle=False,
         drop_last=True,
@@ -115,7 +115,7 @@ def train(rank, world_size, args):
         validation_dataset,
         batch_size=1,
         shuffle=False,
-        num_workers=8,
+        num_workers=1,
         pin_memory=True,
     )
 
