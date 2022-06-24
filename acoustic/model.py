@@ -26,8 +26,8 @@ class AcousticModel(nn.Module):
         """
         Args:
             unit_series - Unit series
-            mels - Ground Truth mel-spectrograms for teacher-forcing
-        Returns - Mel-spectrograms
+            mels - Ground Truth mel-spectrograms for teacher-forcing, from t=0 to t=T-1
+        Returns - Mel-spectrograms, from t=1 to t=T
         """
         latent_series = self.encoder(unit_series)
         return self.decoder(latent_series, mels)
@@ -42,31 +42,38 @@ class Encoder(nn.Module):
     """Unit-to-Latent FeedForward Encoder, [Emb-]SegFC-Conv"""
     def __init__(self, discrete: bool = False, upsample: bool = True):
         super().__init__()
-        dim_z = 512
+        dim_i: int = 256
+        dim_i_feat: int = 256
+        dim_z: int = 512
+        kernel_size: int = 5
 
-        self.embedding = nn.Embedding(100 + 1, 256) if discrete else None
+        # todo: `+1` is for padding ...?
+        self.embedding = nn.Embedding(100 + 1, dim_i) if discrete else None
         # (SegFC256-ReLU-DO0.5)x2
-        self.prenet = PreNet(256, 256, 256)
+        self.prenet = PreNet(dim_i, 256, dim_i_feat)
         # (Conv-ReLU-IN)-ConvT-(Conv-ReLU-IN)x2
         self.convs = nn.Sequential(
-            nn.Conv1d(256, dim_z, 5, 1, 2),
+            nn.Conv1d(dim_i_feat, dim_z, kernel_size, padding="same"),
             nn.ReLU(),
             nn.InstanceNorm1d(dim_z),
             nn.ConvTranspose1d(dim_z, dim_z, 4, 2, 1) if upsample else nn.Identity(),
-            nn.Conv1d(dim_z, dim_z, 5, 1, 2),
+            nn.Conv1d(dim_z,      dim_z, kernel_size, padding="same"),
             nn.ReLU(),
             nn.InstanceNorm1d(dim_z),
-            nn.Conv1d(dim_z, dim_z, 5, 1, 2),
+            nn.Conv1d(dim_z,      dim_z, kernel_size, padding="same"),
             nn.ReLU(),
             nn.InstanceNorm1d(dim_z),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.embedding is not None:
+            # (B, T_unit) -> (B, T_unit, Feat=emb) ?
             x = self.embedding(x)
+        # (B, T_unit, Feat) -> (B, T_unit, Feat)
         x = self.prenet(x)
-        x = self.convs(x.transpose(1, 2))
-        return x.transpose(1, 2)
+        # (B, T_unit, Feat) -> (B, Feat=f_i, T_unit) -> (B, Feat=f_o, T_f=2*T_unit) -> (B, T_f, Feat)
+        x = self.convs(x.transpose(1, 2)).transpose(1, 2)
+        return x
 
 
 class Decoder(nn.Module):
@@ -88,8 +95,8 @@ class Decoder(nn.Module):
         """
         Args:
             x -
-            mels - Ground Truth mel-spectrograms for teacher-forcing
-        Returns - Estimated mel-spectrograms
+            mels - Ground Truth mel-spectrograms for teacher-forcing, from t=0 to t=T-1
+        Returns - Estimated mel-spectrograms, from t=1 to t=T
         """
         mels = self.prenet(mels)
         x, _ = self.lstm1(torch.cat((x, mels), dim=-1))
