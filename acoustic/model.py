@@ -1,4 +1,5 @@
 import torch
+from torch import cat
 import torch.nn as nn
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 
@@ -78,7 +79,10 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    """Latent-to-Mel autoregressive Decoder, AR(SegFC-Res(LSTM)-Proj)"""
+    """Latent-to-Mel autoregressive Decoder, AR(SegFC-Res(LSTM)-Proj).
+
+    No look-ahead.
+    """
     def __init__(self):
         super().__init__()
         n_mels = 128
@@ -99,14 +103,15 @@ class Decoder(nn.Module):
             mspc_0_T_1 :: (B, T_mspc, Freq)     - Ground Truth mel-spectrograms for teacher-forcing, from t=0 to t=T-1
         Returns - Estimated mel-spectrograms, from t=1 to t=T
         """
-        mspc_0_T_1 = self.prenet(mspc_0_T_1)
-        mspc_1_T_estim, _ = self.lstm1(torch.cat((latent_1_T, mspc_0_T_1), dim=-1))
-        res = mspc_1_T_estim
-        mspc_1_T_estim, _ = self.lstm2(mspc_1_T_estim)
-        mspc_1_T_estim = res + mspc_1_T_estim
-        res = mspc_1_T_estim
-        mspc_1_T_estim, _ = self.lstm3(mspc_1_T_estim)
-        mspc_1_T_estim = res + mspc_1_T_estim
+        ar_0_T_1 = self.prenet(mspc_0_T_1)
+        i_rnn_1_T = cat((latent_1_T, ar_0_T_1), dim=-1)
+
+        # LSTM1--LSTM2-+--LSTM3-+--o
+        #       \-----/  \-----/
+        mspc_1_T_estim  = self.lstm1(i_rnn_1_T)[0]
+        mspc_1_T_estim += self.lstm2(mspc_1_T_estim)[0]
+        mspc_1_T_estim += self.lstm3(mspc_1_T_estim)[0]
+
         return self.proj(mspc_1_T_estim)
 
     @torch.inference_mode()
@@ -124,8 +129,9 @@ class Decoder(nn.Module):
             m = self.prenet(m)
             x = torch.cat((x, m), dim=1).unsqueeze(1)
             x1, (h1, c1) = self.lstm1(x, (h1, c1))
-            x2, (h2, c2) = self.lstm2(x1, (h2, c2))
-            x = x1 + x2
+            x = x1
+            x2, (h2, c2) = self.lstm2(x, (h2, c2))
+            x = x + x2
             x3, (h3, c3) = self.lstm3(x, (h3, c3))
             x = x + x3
             m = self.proj(x).squeeze(1)
