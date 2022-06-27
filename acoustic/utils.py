@@ -64,6 +64,7 @@ def save_checkpoint(
 ):
     """Save model/optim/step/loss in the directory."""
     state = {
+        #                 ddp.module
         "acoustic-model": acoustic.module.state_dict(),
         "optimizer": optimizer.state_dict(),
         "step": step,
@@ -88,7 +89,7 @@ def load_checkpoint(
     """Restore model/optim/step/loss from the checkpoint."""
     logger.info(f"Loading checkpoint from {load_path}")
     checkpoint = torch.load(load_path, map_location={"cuda:0": f"cuda:{rank}"})
-    acoustic.load_state_dict(checkpoint["acoustic-model"])
+    acoustic.module.load_state_dict(checkpoint["acoustic-model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     return checkpoint["step"], checkpoint["loss"]
 
