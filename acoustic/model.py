@@ -58,6 +58,7 @@ class Encoder(nn.Module):
             nn.Conv1d(dim_i_feat, dim_z, kernel_size, padding="same"),
             nn.ReLU(),
             nn.InstanceNorm1d(dim_z),
+            #                    c_i,   c_o, k, s, p
             nn.ConvTranspose1d(dim_z, dim_z, 4, 2, 1) if upsample else nn.Identity(),
             nn.Conv1d(dim_z,      dim_z, kernel_size, padding="same"),
             nn.ReLU(),
@@ -108,9 +109,9 @@ class Decoder(nn.Module):
 
         # LSTM1--LSTM2-+--LSTM3-+--o
         #       \-----/  \-----/
-        mspc_1_T_estim  = self.lstm1(i_rnn_1_T)[0]
-        mspc_1_T_estim += self.lstm2(mspc_1_T_estim)[0]
-        mspc_1_T_estim += self.lstm3(mspc_1_T_estim)[0]
+        mspc_1_T_estim =                  self.lstm1(i_rnn_1_T)[0]
+        mspc_1_T_estim = mspc_1_T_estim + self.lstm2(mspc_1_T_estim)[0]
+        mspc_1_T_estim = mspc_1_T_estim + self.lstm3(mspc_1_T_estim)[0]
 
         return self.proj(mspc_1_T_estim)
 
