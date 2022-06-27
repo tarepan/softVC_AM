@@ -2,6 +2,8 @@ import torch
 from torch import cat
 import torch.nn as nn
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
+from extorch import Conv1dEx
+
 
 URLS = {
     "hubert-discrete": "https://github.com/bshall/acoustic-model/releases/download/v0.1/hubert-discrete-ffc42c75.pt",
@@ -11,7 +13,7 @@ URLS = {
 
 class AcousticModel(nn.Module):
     """Unit-to-Mel acoustic model, SegFC-Conv-AR(SegFC-Res(LSTM)-Proj)"""
-    def __init__(self, discrete: bool = False, upsample: bool = True):
+    def __init__(self, discrete: bool = False, upsample: bool = True, causal: bool = False):
         """
         Args:
             discrete - Whether input is discrete unit or not (affect only Encoder embedding ON/OFF)
@@ -19,7 +21,7 @@ class AcousticModel(nn.Module):
         """
         super().__init__()
         # [Emb-]SegFC-Conv
-        self.encoder = Encoder(discrete, upsample)
+        self.encoder = Encoder(discrete, upsample, causal)
         # AR(SegFC-Res(LSTM)-Proj)
         self.decoder = Decoder()
 
@@ -42,7 +44,7 @@ class AcousticModel(nn.Module):
 
 class Encoder(nn.Module):
     """Unit-to-Latent FeedForward Encoder, [Emb-]SegFC-Conv"""
-    def __init__(self, discrete: bool = False, upsample: bool = True):
+    def __init__(self, discrete: bool = False, upsample: bool = True, causal: bool = False):
         super().__init__()
         dim_i: int = 256
         dim_i_feat: int = 256
@@ -55,15 +57,15 @@ class Encoder(nn.Module):
         self.prenet = PreNet(dim_i, 256, dim_i_feat)
         # (Conv-ReLU-IN)-ConvT-(Conv-ReLU-IN)x2
         self.convs = nn.Sequential(
-            nn.Conv1d(dim_i_feat, dim_z, kernel_size, padding="same"),
+            Conv1dEx(dim_i_feat, dim_z, kernel_size, padding="same", causal=causal),
             nn.ReLU(),
             nn.InstanceNorm1d(dim_z),
             #                    c_i,   c_o, k, s, p
             nn.ConvTranspose1d(dim_z, dim_z, 4, 2, 1) if upsample else nn.Identity(),
-            nn.Conv1d(dim_z,      dim_z, kernel_size, padding="same"),
+            Conv1dEx(dim_z,      dim_z, kernel_size, padding="same", causal=causal),
             nn.ReLU(),
             nn.InstanceNorm1d(dim_z),
-            nn.Conv1d(dim_z,      dim_z, kernel_size, padding="same"),
+            Conv1dEx(dim_z,      dim_z, kernel_size, padding="same", causal=causal),
             nn.ReLU(),
             nn.InstanceNorm1d(dim_z),
         )
@@ -169,6 +171,7 @@ def _acoustic(
     upsample: bool,
     pretrained: bool = True,
     progress: bool = True,
+    causal: bool = False,
 ) -> AcousticModel:
     """Generate AcousticModel instance.
 
@@ -176,7 +179,7 @@ def _acoustic(
         name :: "hubert-discrete" | "hubert-soft" - Model name
         upsample - (Currently always ON)
     """
-    acoustic = AcousticModel(discrete, upsample)
+    acoustic = AcousticModel(discrete, upsample, causal=causal)
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(URLS[name], progress=progress)
         consume_prefix_in_state_dict_if_present(checkpoint, "module.")
@@ -188,6 +191,7 @@ def _acoustic(
 def hubert_discrete(
     pretrained: bool = True,
     progress: bool = True,
+    causal: bool = False,
 ) -> AcousticModel:
     r"""HuBERT-Discrete acoustic model from `"A Comparison of Discrete and Soft Speech Units for Improved Voice Conversion"`.
     Args:
@@ -200,12 +204,14 @@ def hubert_discrete(
         upsample=True,
         pretrained=pretrained,
         progress=progress,
+        causal=causal,
     )
 
 
 def hubert_soft(
     pretrained: bool = True,
     progress: bool = True,
+    causal: bool = False,
 ) -> AcousticModel:
     r"""HuBERT-Soft acoustic model from `"A Comparison of Discrete and Soft Speech Units for Improved Voice Conversion"`.
     Args:
@@ -218,4 +224,5 @@ def hubert_soft(
         upsample=True,
         pretrained=pretrained,
         progress=progress,
+        causal=causal,
     )

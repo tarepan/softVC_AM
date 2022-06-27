@@ -75,7 +75,7 @@ def train(rank, world_size, args):
     # Initialize models and optimizer
     ####################################################################################
 
-    acoustic = AcousticModel().to(rank)
+    acoustic = AcousticModel(causal=args.causal).to(rank)
 
     acoustic = DDP(acoustic, device_ids=[rank])
 
@@ -321,6 +321,10 @@ if __name__ == "__main__":
         "--discrete",
         action='store_true',
         help="Use discrete units.",
+    )
+    parser.add_argument(
+        "--causal",
+        action='store_true',
     )
     args = parser.parse_args()
 
