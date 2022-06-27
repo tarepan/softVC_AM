@@ -75,7 +75,7 @@ def train(rank, world_size, args):
     # Initialize models and optimizer
     ####################################################################################
 
-    acoustic = AcousticModel().to(rank)
+    acoustic = AcousticModel(causal=args.causal).to(rank)
 
     acoustic = DDP(acoustic, device_ids=[rank])
 
@@ -251,6 +251,7 @@ def train(rank, world_size, args):
                 # Log validation metrics
                 ############################
 
+                # Logging
                 if rank == 0:
                     writer.add_scalar(
                         "validation/loss",
@@ -264,22 +265,22 @@ def train(rank, world_size, args):
                 # Flag whether best val score or not
                 new_best: bool = best_loss > validation_loss.value
 
-                if new_best or global_step % CHECKPOINT_INTERVAL:
-                    # `best_loss` value upadte
-                    if new_best:
-                        logger.info("-------- new best model found!")
-                        best_loss = validation_loss.value
-                    # Checkpointing
-                    if rank == 0:
-                        save_checkpoint(
-                            checkpoint_dir=args.checkpoint_dir,
-                            acoustic=acoustic,
-                            optimizer=optimizer,
-                            step=global_step,
-                            loss=validation_loss.value,
-                            best=new_best,
-                            logger=logger,
-                        )
+                # `best_loss` value upadte
+                if new_best:
+                    logger.info("-------- new best model found!")
+                    best_loss = validation_loss.value
+
+                # Checkpointing
+                if rank == 0:
+                    save_checkpoint(
+                        checkpoint_dir=args.checkpoint_dir,
+                        acoustic=acoustic,
+                        optimizer=optimizer,
+                        step=global_step,
+                        loss=validation_loss.value,
+                        best=new_best,
+                        logger=logger,
+                    )
 
             # -----------------------------------------------------------------------------#
             # End validation loop
@@ -321,6 +322,10 @@ if __name__ == "__main__":
         "--discrete",
         action='store_true',
         help="Use discrete units.",
+    )
+    parser.add_argument(
+        "--causal",
+        action='store_true',
     )
     args = parser.parse_args()
 

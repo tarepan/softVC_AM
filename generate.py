@@ -11,7 +11,10 @@ import torch
 
 
 def generate(args):
-    """Generate mel-spec .npy from unit .npy with Pre-trained AcousticModel."""
+    """Generate mel-spec .npy from unit .npy with Pre-trained AcousticModel.
+
+    Depends on original SoftVC-AM, not on this repository.
+    """
     print("Loading acoustic model checkpoint")
     acoustic = torch.hub.load("bshall/acoustic-model:main", f"hubert_{args.model}").cuda()
 
