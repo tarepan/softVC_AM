@@ -62,7 +62,10 @@ def save_checkpoint(
     best,
     logger,
 ):
-    """Save model/optim/step/loss in the directory."""
+    """Save model/optim/step/loss in the directory.
+
+    Best model is saved also as `model-best.pt`.
+    """
     state = {
         #                 ddp.module
         "acoustic-model": acoustic.module.state_dict(),

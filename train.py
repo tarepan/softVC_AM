@@ -157,9 +157,9 @@ def train(rank, world_size, args):
     logger.info(f"started at epoch: {start_epoch}")
     logger.info("**" * 40 + "\n")
 
+    # For logging (not for backprop)
     average_loss = Metric()
     epoch_loss = Metric()
-
     validation_loss = Metric()
 
     for epoch in range(start_epoch, n_epochs + 1):
@@ -261,12 +261,15 @@ def train(rank, world_size, args):
                         f"valid -- epoch: {epoch}, loss: {validation_loss.value:.4f}"
                     )
 
-                new_best = best_loss > validation_loss.value
+                # Flag whether best val score or not
+                new_best: bool = best_loss > validation_loss.value
+
                 if new_best or global_step % CHECKPOINT_INTERVAL:
+                    # `best_loss` value upadte
                     if new_best:
                         logger.info("-------- new best model found!")
                         best_loss = validation_loss.value
-
+                    # Checkpointing
                     if rank == 0:
                         save_checkpoint(
                             checkpoint_dir=args.checkpoint_dir,
