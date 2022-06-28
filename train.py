@@ -16,7 +16,7 @@ import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from acoustic import AcousticModel
-from acoustic.dataset import MelDataset
+from acoustic.dataset import MelUnitDataset
 from acoustic.utils import Metric, save_checkpoint, load_checkpoint, plot_spectrogram
 
 
@@ -90,7 +90,7 @@ def train(rank, world_size, args):
     # Initialize datasets and dataloaders
     ####################################################################################
 
-    train_dataset = MelDataset(
+    train_dataset = MelUnitDataset(
         root=args.dataset_dir,
         train=True,
         discrete=args.discrete,
@@ -107,7 +107,7 @@ def train(rank, world_size, args):
         drop_last=True,
     )
 
-    validation_dataset = MelDataset(
+    validation_dataset = MelUnitDataset(
         root=args.dataset_dir,
         train=False,
         # todo: No discrete flag. Is this bug?

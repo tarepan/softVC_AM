@@ -7,16 +7,23 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 
 
-class MelDataset(Dataset):
+class MelUnitDataset(Dataset):
+    """Dataset yielding unit series and mel-spectrograms."""
     def __init__(self, root: Path, train: bool = True, discrete: bool = False):
         """
+        Prerequisites:
+            - log-mel-spectrogram
+            - unit series
+        Data structure:
+            root/
+                mels/
+                    <rel_path_in_metadata>.npy
+                soft|discrete/
+                    <rel_path_in_metadata>.npy
         Args:
             root - Data root path, under which data exist
             train - Whether train mode or not
             discrete - Whether discrete unit or not (default: soft)
-        Prerequisites:
-            - log-mel-spectrogram .npy under f'{root}/mels' directory
-            - unit series .npy under f'{root}/{'discrete'|'soft'}' directory
         """
         self.discrete = discrete
         self.mels_dir = root / "mels"
@@ -35,6 +42,7 @@ class MelDataset(Dataset):
             mspc_m1_T :: (T_mspc=2*T_unit+1, Freq) - Mel-spectrogram, from t=-1 (zero padded) to t=T
             unit_0_T  :: (T_unit,            ?)    - Unit series, from t=0 to t=T
         """
+        UPSAMPLING_RATE = 2
         path = self.metadata[index]
         mel_path = self.mels_dir / path
         units_path = self.units_dir / path
@@ -42,7 +50,7 @@ class MelDataset(Dataset):
         mspc_series = np.load(mel_path.with_suffix(".npy")).T
         unit_0_T = np.load(units_path.with_suffix(".npy"))
 
-        length = 2 * unit_0_T.shape[0]
+        length = UPSAMPLING_RATE * unit_0_T.shape[0]
 
         # log-mel-spectrogram :: (T_mspc = 2*T_unit+1, Freq)
         mspc_0_T = torch.from_numpy(mspc_series[:length, :])
