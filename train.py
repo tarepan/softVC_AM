@@ -86,6 +86,9 @@ def train(rank, world_size, args):
         weight_decay=WEIGHT_DECAY,
     )
 
+    soft_disc: str = "soft" if not args.discrete else "discrete"
+    vocoder = torch.hub.load("bshall/hifigan:main", f"hifigan_hubert_{soft_disc}").cuda()
+
     ####################################################################################
     # Initialize datasets and dataloaders
     ####################################################################################
@@ -225,9 +228,14 @@ def train(rank, world_size, args):
                     mels, units = mels.to(rank), units.to(rank)
 
                     with torch.no_grad():
+                        # Unit-to-Mel
                         mel_0_T_1, mel_1_T = mels[:, :-1], mels[:, 1:]
+                        # (B=1, 1, T_mspc)
                         mel_1_T_estim = acoustic(units, mel_0_T_1)
                         loss = F.l1_loss(mel_1_T_estim, mel_1_T)
+
+                        # Mel-to-Wave :: (B=1, 1, T_mspc) -> (B=1, 1, T_s)
+                        wave_estim = vocoder(mel_1_T_estim.transpose(1, 2))
 
                     ####################################################################
                     # Update validation metrics and log generated mels
@@ -243,7 +251,16 @@ def train(rank, world_size, args):
                             ),
                             global_step,
                         )
-
+                        # [PyTorch](https://pytorch.org/docs/stable/tensorboard.html#torch.
+                        #     utils.tensorboard.writer.SummaryWriter.add_audio)
+                        # add_audio(tag: str, snd_tensor: Tensor(1, L), global_step: Optional[int] = None, sample_rate: int = 44100)
+                        writer.add_audio(
+                            f"vocoded/wave_{i}",
+                            # (B=1, 1, T_s) -> (1, T_s)
+                            wave_estim.squeeze().cpu(),
+                            global_step=global_step,
+                            sample_rate=vocoder.sample_rate,
+                        )
                 acoustic.train()
 
                 ############################################################################
