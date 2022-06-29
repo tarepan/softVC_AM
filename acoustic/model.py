@@ -17,7 +17,7 @@ class AcousticModel(nn.Module):
         """
         Args:
             discrete - Whether input is discrete unit or not (affect only Encoder embedding ON/OFF)
-            upsample -
+            upsample - Whether to upsample intermediate feature series
         """
         super().__init__()
         # [Emb-]SegFC-Conv

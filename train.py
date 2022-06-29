@@ -75,7 +75,7 @@ def train(rank, world_size, args):
     # Initialize models and optimizer
     ####################################################################################
 
-    acoustic = AcousticModel(causal=args.causal).to(rank)
+    acoustic = AcousticModel(discrete=args.discrete, causal=args.causal).to(rank)
 
     acoustic = DDP(acoustic, device_ids=[rank])
 
@@ -110,8 +110,7 @@ def train(rank, world_size, args):
     validation_dataset = MelUnitDataset(
         root=args.dataset_dir,
         train=False,
-        # todo: No discrete flag. Is this bug?
-        # discrete=args.discrete,
+        discrete=args.discrete,
     )
     validation_loader = DataLoader(
         validation_dataset,
