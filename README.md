@@ -1,12 +1,15 @@
-<p align="center">
-    <a target="_blank" href="https://colab.research.google.com/github/bshall/soft-vc/blob/main/soft-vc-demo.ipynb">
-        <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
-    </a>
-</p>
+<div align="center">
 
-# Acoustic-Model
+# SoftVC-AM : Unit-to-Mspc VC module of SoftVC <!-- omit in toc -->
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)][notebook]
+[![Paper](http://img.shields.io/badge/paper-arxiv.2110.06280-B31B1B.svg)][paper]
 
-Training and inference scripts for the acoustic models in [A Comparison of Discrete and Soft Speech Units for Improved Voice Conversion](https://ieeexplore.ieee.org/abstract/document/9746484). For more details see [soft-vc](https://github.com/bshall/soft-vc). Audio samples can be found [here](https://bshall.github.io/soft-vc/). Colab demo can be found [here](https://colab.research.google.com/github/bshall/soft-vc/blob/main/soft-vc-demo.ipynb).
+</div>
+
+AcousticModel module of SoftVC, unit-based Any-to-One voice conversion.  
+This repository is a fork of official [SoftVC-AM][official_softvcam].  
+
+For more whole-model details, samples and E2E demo, see [soft-vc](https://github.com/bshall/soft-vc).
 
 <div align="center">
     <img width="100%" alt="Soft-VC"
@@ -18,10 +21,9 @@ Training and inference scripts for the acoustic models in [A Comparison of Discr
   </sup>
 </div>
 
-## Example Usage
-
-### Programmatic Usage
-
+## How to Use
+### Inference
+#### As Library
 ```python
 import torch
 import numpy as np
@@ -36,7 +38,7 @@ units = torch.from_numpy(np.load("path/to/units"))
 mel = acoustic.generate(units)
 ```
 
-### Script-Based Usage
+#### As Script
 
 ```
 usage: generate.py [-h] {soft,discrete} in-dir out-dir
@@ -53,15 +55,16 @@ optional arguments:
 ```
 
 ### Training
+☞ [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)][notebook]  
+
 #### Preprocessing
 wave-to-mel preprocessing:  
 ```bash
 python mels.py <in-dir> <out-dir>
-
-# todo: wave-to-unit preprocessing (not found in this repository)
 ```
 
 #### Train
+unit-to-mel training:
 ```bash
 python train.py <dataset-dir> <checkpoint-dir>
 # python train.py <dataset-dir> <checkpoint-dir> --resume=<checkpoint-file> # Resume
@@ -69,15 +72,13 @@ python train.py <dataset-dir> <checkpoint-dir>
 
 ## Links
 
-- [Soft-VC repo](https://github.com/bshall/soft-vc)
+- [Soft-VC root repo](https://github.com/bshall/soft-vc)
+  - [Soft-VC wave-to-unit HuBERT](https://github.com/bshall/hubert)
+  - [Soft-VC mspc-to-wave HiFiGAN](https://github.com/bshall/hifigan)
 - [Soft-VC paper](https://ieeexplore.ieee.org/abstract/document/9746484)
-- [HuBERT content encoders](https://github.com/bshall/hubert)
-- [HiFiGAN vocoder](https://github.com/bshall/hifigan)
 
-## Citation
-
-If you found this work helpful please consider citing our paper:
-
+## References
+### Original paper
 ```
 @inproceedings{
     soft-vc-2022,
@@ -87,3 +88,7 @@ If you found this work helpful please consider citing our paper:
     year={2022}
 }
 ```
+
+[paper]: https://arxiv.org/abs/2111.02392
+[notebook]: https://colab.research.google.com/github/tarepan/softVC_AM/blob/main/softVC_AM.ipynb
+[official_softvcam]: https://github.com/bshall/acoustic-model
