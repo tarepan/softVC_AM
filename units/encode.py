@@ -1,6 +1,9 @@
 from pathlib import Path
+
 import joblib
 from tqdm import tqdm
+import torch
+import numpy as np
 
 from .cpc import CpcFeatureReader
 
@@ -11,10 +14,10 @@ def encode_cpc_dataset(model: str, in_dir: Path, out_dir: Path, extension: str =
         units - unit series as .npy file
     """
 
-    path_enc_state = "./cpc_big_ll6kh_top_cpc.pt"
+    path_enc_state = "./cpc_big_ll6kh_top_ctc.pt"
     path_kmeans_state = "./km.bin"
 
-    assert model == "cpc_discrete", "This function support only cpc discrete."
+    assert model == "discrete", "This function support only cpc discrete."
 
     print(f"Loading cpc checkpoint")
     # Models

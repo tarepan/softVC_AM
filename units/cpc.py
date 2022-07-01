@@ -1,12 +1,12 @@
 # From https://github.com/facebookresearch/fairseq/tree/main/examples/textless_nlp/gslm/speech2unit
 # under MIT License
 
-import soundfile as sf
 import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 from numpy.typing import NDArray
+import librosa
 
 
 class CpcFeatureReader:
@@ -44,15 +44,7 @@ class CpcFeatureReader:
             wav :: (T_wave,) - The waveform
         """
         # Load
-        wav, sr = sf.read(path)
-
-        # stereo to mono
-        if wav.ndim == 2:
-            wav = wav.mean(-1)
-        assert wav.ndim == 1, wav.ndim
-
-        # No auto-resampling
-        assert sr == self.sample_rate, sr
+        wav, _ = librosa.load(path, sr=self.sample_rate, mono=True)
 
         if ref_len is not None and abs(ref_len - len(wav)) > 160:
             print(f"ref {ref_len} != read {len(wav)} ({path})")

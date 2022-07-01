@@ -49,6 +49,7 @@ def train(rank, world_size, args):
         init_method=INIT_METHOD,
     )
 
+    upsampling = not args.no_upsampling
     ####################################################################################
     # Setup logging utilities:
     ####################################################################################
@@ -75,7 +76,7 @@ def train(rank, world_size, args):
     # Initialize models and optimizer
     ####################################################################################
 
-    acoustic = AcousticModel(discrete=args.discrete, causal=args.causal).to(rank)
+    acoustic = AcousticModel(discrete=args.discrete, upsample=upsampling, causal=args.causal).to(rank)
 
     acoustic = DDP(acoustic, device_ids=[rank])
 
@@ -97,6 +98,7 @@ def train(rank, world_size, args):
         root=args.dataset_dir,
         train=True,
         discrete=args.discrete,
+        upsample=upsampling,
     )
     train_sampler = DistributedSampler(train_dataset, drop_last=True)
     train_loader = DataLoader(
@@ -114,6 +116,7 @@ def train(rank, world_size, args):
         root=args.dataset_dir,
         train=False,
         discrete=args.discrete,
+        upsample=upsampling,
     )
     validation_loader = DataLoader(
         validation_dataset,
@@ -341,6 +344,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--causal",
+        action='store_true',
+    )
+    parser.add_argument(
+        "--no-upsampling",
         action='store_true',
     )
     args = parser.parse_args()
