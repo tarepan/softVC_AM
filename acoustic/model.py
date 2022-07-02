@@ -192,6 +192,7 @@ def hubert_discrete(
     pretrained: bool = True,
     progress: bool = True,
     causal: bool = False,
+    upsampling: bool = True,
 ) -> AcousticModel:
     r"""HuBERT-Discrete acoustic model from `"A Comparison of Discrete and Soft Speech Units for Improved Voice Conversion"`.
     Args:
@@ -201,7 +202,7 @@ def hubert_discrete(
     return _acoustic(
         "hubert-discrete",
         discrete=True,
-        upsample=True,
+        upsample=upsampling,
         pretrained=pretrained,
         progress=progress,
         causal=causal,
