@@ -231,14 +231,18 @@ def train(rank, world_size, args):
                     mels, units = mels.to(rank), units.to(rank)
 
                     with torch.no_grad():
-                        # Unit-to-Mel
                         mel_0_T_1, mel_1_T = mels[:, :-1], mels[:, 1:]
-                        # (B=1, 1, T_mspc)
+
+                        # Teacher-forcing
+                        ## Unit-to-Mel :: -> (B=1, 1, T_mspc)
                         mel_1_T_estim = acoustic(units, mel_0_T_1)
                         loss = F.l1_loss(mel_1_T_estim, mel_1_T)
-
-                        # Mel-to-Wave :: (B=1, 1, T_mspc) -> (B=1, 1, T_s)
+                        ## Mel-to-Wave :: (B=1, 1, T_mspc) -> (B=1, 1, T_s)
                         wave_estim = vocoder(mel_1_T_estim.transpose(1, 2))
+
+                        # AR
+                        mel_1_T_estim_ar = acoustic.module.generate(units)
+                        wave_estim_ar = vocoder(mel_1_T_estim_ar.transpose(1, 2))
 
                     ####################################################################
                     # Update validation metrics and log generated mels
@@ -258,9 +262,16 @@ def train(rank, world_size, args):
                         #     utils.tensorboard.writer.SummaryWriter.add_audio)
                         # add_audio(tag: str, snd_tensor: Tensor(1, L), global_step: Optional[int] = None, sample_rate: int = 44100)
                         writer.add_audio(
-                            f"vocoded/wave_{i}",
+                            f"teacher-forcing/wave_{i}",
                             # (B=1, 1, T_s) -> (1, T_s)
                             wave_estim.squeeze().cpu(),
+                            global_step=global_step,
+                            sample_rate=vocoder.sample_rate,
+                        )
+                        writer.add_audio(
+                            f"AR/wave_{i}",
+                            # (B=1, 1, T_s) -> (1, T_s)
+                            wave_estim_ar.squeeze().cpu(),
                             global_step=global_step,
                             sample_rate=vocoder.sample_rate,
                         )
