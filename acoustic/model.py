@@ -119,6 +119,12 @@ class Decoder(nn.Module):
 
     @torch.inference_mode()
     def generate(self, xs: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            xs :: (B, T_f=T_mspc, Feat) - Latent series, from t=1 to t=T
+        Returns:
+            :: (B, T_mspc, Feat)
+        """
         m = torch.zeros(xs.size(0), 128, device=xs.device)
         h1 = torch.zeros(1, xs.size(0), 768, device=xs.device)
         c1 = torch.zeros(1, xs.size(0), 768, device=xs.device)
@@ -127,16 +133,18 @@ class Decoder(nn.Module):
         h3 = torch.zeros(1, xs.size(0), 768, device=xs.device)
         c3 = torch.zeros(1, xs.size(0), 768, device=xs.device)
 
+        # mel :: (B, Feat)[]
         mel = []
+        # x :: (B, Feat)
         for x in torch.unbind(xs, dim=1):
             m = self.prenet(m)
             x = torch.cat((x, m), dim=1).unsqueeze(1)
             x1, (h1, c1) = self.lstm1(x, (h1, c1))
-            x = x1
+            x =     x1
             x2, (h2, c2) = self.lstm2(x, (h2, c2))
-            x = x + x2
+            x = x + x2 # Residual
             x3, (h3, c3) = self.lstm3(x, (h3, c3))
-            x = x + x3
+            x = x + x3 # Residual
             m = self.proj(x).squeeze(1)
             mel.append(m)
         return torch.stack(mel, dim=1)
