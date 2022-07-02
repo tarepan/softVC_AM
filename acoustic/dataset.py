@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import NDArray
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
@@ -46,27 +47,29 @@ class MelUnitDataset(Dataset):
             unit_0_T  :: (T_unit, Feat) | (T_unit,) - Continuous | Discrete Unit series, from t=0 to t=T
         """
         path = self.metadata[index]
-        mel_path = self.mels_dir / path
-        units_path = self.units_dir / path
+        path_mspc_series = self.mels_dir  / path
+        path_unit_series = self.units_dir / path
 
-        mspc_series = np.load(mel_path.with_suffix(".npy")).T
-        unit_0_T = np.load(units_path.with_suffix(".npy"))
+        mspc_series: NDArray = np.load(path_mspc_series.with_suffix(".npy")).T
+        unit_series: NDArray = np.load(path_unit_series.with_suffix(".npy"))
 
         # Length adjustment (adjust to short one)
-        len_unit_melscale = self.upsampling_rate * unit_0_T.shape[0]
-        len_mel = mspc_series.shape[0]
-        if len_unit_melscale <= len_mel:
-            # Unit <= Mspc, so adjust to unit
-            mspc_0_T = torch.from_numpy(mspc_series[:len_unit_melscale])
-            unit_0_T = torch.from_numpy(unit_0_T)
+        len_unit_melscale = self.upsampling_rate * unit_series.shape[0]
+        len_mspc          =                        mspc_series.shape[0]
+        if len_unit_melscale <= len_mspc:
+            # Unit <= Mspc, so adjust mspc to unit
+            mspc_0_T = mspc_series[:len_unit_melscale]
+            unit_0_T = unit_series
         else:
             # Mspc < Unit, so adjust to mspc
             # todo: Non-integer upsampling rate
-            len_mspc_just = len_mel // self.upsampling_rate * self.upsampling_rate
+            len_mspc_just = len_mspc // self.upsampling_rate * self.upsampling_rate
             len_unit = len_mspc_just // self.upsampling_rate
-            mspc_0_T = torch.from_numpy(mspc_series[:len_mspc_just])
-            unit_0_T = torch.from_numpy(unit_0_T[:len_unit])
+            mspc_0_T = mspc_series[:len_mspc_just]
+            unit_0_T = unit_series[:len_unit]
             
+        mspc_0_T = torch.from_numpy(mspc_0_T)
+        unit_0_T = torch.from_numpy(unit_0_T)
 
         ## Zero padding of time for AR input :: (T_mspc = 2*T_unit, Freq) -> (T_mspc = 2*T_unit+1, Freq)
         mspc_m1_T = F.pad(mspc_0_T, (0, 0, 1, 0))
