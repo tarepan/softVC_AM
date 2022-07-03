@@ -76,7 +76,8 @@ def train(rank, world_size, args):
     # Initialize models and optimizer
     ####################################################################################
 
-    acoustic = AcousticModel(discrete=args.discrete, upsample=upsampling, causal=args.causal).to(rank)
+    # n_emb_group: int = 1, size_codebook
+    acoustic = AcousticModel(discrete=args.discrete, upsample=upsampling, causal=args.causal, n_emb_group=args.n_emb_group, size_codebook=args.size_codebook).to(rank)
 
     acoustic = DDP(acoustic, device_ids=[rank])
 
@@ -99,6 +100,7 @@ def train(rank, world_size, args):
         train=True,
         discrete=args.discrete,
         upsample=upsampling,
+        size_codebook=args.size_codebook,
     )
     train_sampler = DistributedSampler(train_dataset, drop_last=True)
     train_loader = DataLoader(
@@ -117,6 +119,7 @@ def train(rank, world_size, args):
         train=False,
         discrete=args.discrete,
         upsample=upsampling,
+        size_codebook=args.size_codebook,
     )
     validation_loader = DataLoader(
         validation_dataset,
@@ -360,6 +363,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--no-upsampling",
         action='store_true',
+    )
+    parser.add_argument(
+        "--n-emb-group",
+        help="The number of embedding groups.",
+        type=int,
+        default=1,
+    )
+    parser.add_argument(
+        "--size-codebook",
+        help="Size of single codebook.",
+        type=int,
+        default=100,
     )
     args = parser.parse_args()
 

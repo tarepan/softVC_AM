@@ -1,5 +1,5 @@
 import torch
-from torch import cat
+from torch import cat, flatten
 import torch.nn as nn
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from extorch import Conv1dEx
@@ -13,7 +13,7 @@ URLS = {
 
 class AcousticModel(nn.Module):
     """Unit-to-Mel acoustic model, SegFC-Conv-AR(SegFC-Res(LSTM)-Proj)"""
-    def __init__(self, discrete: bool = False, upsample: bool = True, causal: bool = False):
+    def __init__(self, discrete: bool = False, upsample: bool = True, causal: bool = False, n_emb_group: int = 1, size_codebook: int = 100):
         """
         Args:
             discrete - Whether input is discrete unit or not (affect only Encoder embedding ON/OFF)
@@ -21,7 +21,7 @@ class AcousticModel(nn.Module):
         """
         super().__init__()
         # [Emb-]SegFC-Conv
-        self.encoder = Encoder(discrete, upsample, causal)
+        self.encoder = Encoder(discrete, upsample, causal, n_emb_group, size_codebook)
         # AR(SegFC-Res(LSTM)-Proj)
         self.decoder = Decoder()
 
@@ -44,15 +44,16 @@ class AcousticModel(nn.Module):
 
 class Encoder(nn.Module):
     """Unit-to-Latent FeedForward Encoder, [Emb-]SegFC-Conv"""
-    def __init__(self, discrete: bool = False, upsample: bool = True, causal: bool = False):
+    def __init__(self, discrete: bool = False, upsample: bool = True, causal: bool = False, n_emb_group: int = 1, size_codebook: int = 100):
         super().__init__()
+        self.n_emb_group: int = n_emb_group
         dim_i: int = 256
         dim_i_feat: int = 256
         dim_z: int = 512
         kernel_size: int = 5
 
         # todo: `+1` is for padding ...?
-        self.embedding = nn.Embedding(100 + 1, dim_i) if discrete else None
+        self.embedding = nn.Embedding(size_codebook + 1, dim_i // self.n_emb_group) if discrete else None
         # (SegFC256-ReLU-DO0.5)x2
         self.prenet = PreNet(dim_i, 256, dim_i_feat)
         # (Conv-ReLU-IN)-ConvT-(Conv-ReLU-IN)x2
@@ -72,8 +73,13 @@ class Encoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.embedding is not None:
-            # (B, T_unit) -> (B, T_unit, Feat=emb) ?
-            x = self.embedding(x)
+            if self.n_emb_group == 1:
+                # (B, T_unit) -> (B, T_unit, Feat=emb) ?
+                x = self.embedding(x)
+            else:
+                # (B, T_unit, EmbGroup) -> (B, T_unit, EmbGroup, Feat=emb) -> (B, T_unit, Feat=EmbGroup*emb)
+                x = flatten(self.embedding(x), start_dim=2)
+
         # (B, T_unit, Feat) -> (B, T_unit, Feat)
         x = self.prenet(x)
         # (B, T_unit, Feat) -> (B, Feat=f_i, T_unit) -> (B, Feat=f_o, T_f=2*T_unit) -> (B, T_f, Feat)
@@ -180,6 +186,8 @@ def _acoustic(
     pretrained: bool = True,
     progress: bool = True,
     causal: bool = False,
+    n_emb_group: int = 1,
+    size_codebook: int = 100,
 ) -> AcousticModel:
     """Generate AcousticModel instance.
 
@@ -187,7 +195,7 @@ def _acoustic(
         name :: "hubert-discrete" | "hubert-soft" - Model name
         upsample - (Currently always ON)
     """
-    acoustic = AcousticModel(discrete, upsample, causal=causal)
+    acoustic = AcousticModel(discrete, upsample, causal, n_emb_group, size_codebook)
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(URLS[name], progress=progress)
         consume_prefix_in_state_dict_if_present(checkpoint, "module.")
@@ -201,6 +209,8 @@ def hubert_discrete(
     progress: bool = True,
     causal: bool = False,
     upsampling: bool = True,
+    n_emb_group: int = 1,
+    size_codebook: int = 100,
 ) -> AcousticModel:
     r"""HuBERT-Discrete acoustic model from `"A Comparison of Discrete and Soft Speech Units for Improved Voice Conversion"`.
     Args:
@@ -214,6 +224,8 @@ def hubert_discrete(
         pretrained=pretrained,
         progress=progress,
         causal=causal,
+        n_emb_group=n_emb_group,
+        size_codebook=size_codebook,
     )
 
 
