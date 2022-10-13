@@ -1,8 +1,5 @@
 import torch
-import torch.nn.functional as F
 import matplotlib
-
-import torchaudio.transforms as transforms
 
 matplotlib.use("Agg")
 import matplotlib.pylab as plt
@@ -21,36 +18,6 @@ class Metric:
     def reset(self):
         self.steps = 0
         self.value = 0
-
-
-class LogMelSpectrogram(torch.nn.Module):
-    """Waveform-to-LogMelSpec, hop 10msec, 128-dim, same/center padding."""
-    def __init__(self):
-        super().__init__()
-        self.melspctrogram = transforms.MelSpectrogram(
-            sample_rate=16000,
-            n_fft=1024,
-            win_length=1024,
-            hop_length=160,
-            center=False,
-            power=1.0,
-            norm="slaney",
-            onesided=True,
-            n_mels=128,
-            mel_scale="slaney",
-        )
-
-    def forward(self, wav):
-        # `win_length - hop_length`, keep frame-block correspondence (~= "same" padding)
-        len_pad_same = 1024 - 160
-        # pad_L == pad_R, so centered padding
-        padding = len_pad_same // 2
-        wav = F.pad(wav, (padding, padding), "reflect")
-
-        # wave-to-logmelspec
-        mel = self.melspctrogram(wav)
-        logmel = torch.log(torch.clamp(mel, min=1e-5))
-        return logmel
 
 
 def save_checkpoint(

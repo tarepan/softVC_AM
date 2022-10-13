@@ -165,7 +165,7 @@ def train(rank, world_size, args):
     logger.info(f"started at epoch: {start_epoch}")
     logger.info("**" * 40 + "\n")
 
-    # For logging (not for backprop)
+    # For logging
     average_loss = Metric()
     epoch_loss = Metric()
     validation_loss = Metric()
@@ -180,7 +180,7 @@ def train(rank, world_size, args):
         # mels - mels[:, 0] is zeros for AR input
         for mels, mels_lengths, units, units_lengths in train_loader:
 
-            mels, mels_lengths = mels.to(rank), mels_lengths.to(rank)
+            mels,  mels_lengths  =  mels.to(rank),  mels_lengths.to(rank)
             units, units_lengths = units.to(rank), units_lengths.to(rank)
 
             ############################################################################
@@ -195,14 +195,14 @@ def train(rank, world_size, args):
             mel_1_T   = mels[:, 1:]
 
             # AR input t=0 ~ t=T-1 -> Estimated output t=1 ~ t=T
-            mel_1_T_estim = acoustic(units, mel_0_T_1)
+            mel_1_T_estim_tf = acoustic(units, mel_0_T_1)
 
             # todo: No padding-related masking...?
-            loss = F.l1_loss(mel_1_T_estim, mel_1_T, reduction="none")
-            loss = torch.sum(loss, dim=(1, 2)) / (mel_1_T_estim.size(-1) * mels_lengths)
-            loss = torch.mean(loss)
+            loss_tf = F.l1_loss(mel_1_T_estim_tf, mel_1_T, reduction="none")
+            loss_tf = torch.sum(loss_tf, dim=(1, 2)) / (mel_1_T_estim_tf.size(-1) * mels_lengths)
+            loss_tf = torch.mean(loss_tf)
 
-            loss.backward()
+            loss_tf.backward()
             optimizer.step()
 
             global_step += 1
@@ -211,9 +211,11 @@ def train(rank, world_size, args):
             # Update and log training metrics
             ############################################################################
 
-            average_loss.update(loss.item())
-            epoch_loss.update(loss.item())
+            average_loss.update(loss_tf.item())
+            epoch_loss.update(loss_tf.item())
 
+            ############################################################################
+            ## Train loss logging
             if rank == 0 and global_step % LOG_INTERVAL == 0:
                 writer.add_scalar(
                     "train/loss",
@@ -221,11 +223,14 @@ def train(rank, world_size, args):
                     global_step,
                 )
                 average_loss.reset()
+            ############################################################################
 
             # --------------------------------------------------------------------------#
             # Start validation loop
             # --------------------------------------------------------------------------#
 
+            ############################################################################
+            ## Val
             if global_step % VALIDATION_INTERVAL == 0:
                 acoustic.eval()
                 validation_loss.reset()
@@ -233,72 +238,43 @@ def train(rank, world_size, args):
                 for i, (mels, units) in enumerate(validation_loader, 1):
                     mels, units = mels.to(rank), units.to(rank)
 
+                    ####################################################################
+                    ## Batch Inference
                     with torch.no_grad():
                         mel_0_T_1, mel_1_T = mels[:, :-1], mels[:, 1:]
 
                         # Teacher-forcing
                         ## Unit-to-Mel :: -> (B=1, 1, T_mspc)
-                        mel_1_T_estim = acoustic(units, mel_0_T_1)
-                        loss = F.l1_loss(mel_1_T_estim, mel_1_T)
+                        mel_1_T_estim_tf = acoustic(units, mel_0_T_1)
+                        loss_tf = F.l1_loss(mel_1_T_estim_tf, mel_1_T)
                         ## Mel-to-Wave :: (B=1, 1, T_mspc) -> (B=1, 1, T_s)
-                        wave_estim = vocoder(mel_1_T_estim.transpose(1, 2))
+                        wave_estim_tf = vocoder(mel_1_T_estim_tf.transpose(1, 2))
 
                         # AR
                         mel_1_T_estim_ar = acoustic.module.generate(units)
                         wave_estim_ar = vocoder(mel_1_T_estim_ar.transpose(1, 2))
 
-                    ####################################################################
-                    # Update validation metrics and log generated mels
-                    ####################################################################
-
-                    validation_loss.update(loss.item())
-
+                    ## Batch logging
+                    validation_loss.update(loss_tf.item())
                     if rank == 0:
-                        writer.add_figure(
-                            f"generated/mel_{i}",
-                            plot_spectrogram(
-                                mel_1_T_estim.squeeze().transpose(0, 1).cpu().numpy()
-                            ),
-                            global_step,
-                        )
-                        # [PyTorch](https://pytorch.org/docs/stable/tensorboard.html#torch.
-                        #     utils.tensorboard.writer.SummaryWriter.add_audio)
+                        writer.add_figure(f"generated/mel_{i}", plot_spectrogram(mel_1_T_estim_tf.squeeze().transpose(0, 1).cpu().numpy()), global_step)
+                        # [PyTorch](https://pytorch.org/docs/stable/tensorboard.html#torch.utils.tensorboard.writer.SummaryWriter.add_audio)
                         # add_audio(tag: str, snd_tensor: Tensor(1, L), global_step: Optional[int] = None, sample_rate: int = 44100)
-                        writer.add_audio(
-                            f"teacher-forcing/wave_{i}",
-                            # (B=1, 1, T_s) -> (1, T_s)
-                            wave_estim.squeeze().cpu(),
-                            global_step=global_step,
-                            sample_rate=vocoder.sample_rate,
-                        )
-                        writer.add_audio(
-                            f"AR/wave_{i}",
-                            # (B=1, 1, T_s) -> (1, T_s)
-                            wave_estim_ar.squeeze().cpu(),
-                            global_step=global_step,
-                            sample_rate=vocoder.sample_rate,
-                        )
+                            #                                          (B=1, 1, T_s) -> (1, T_s)
+                        writer.add_audio(f"teacher-forcing/wave_{i}", wave_estim_tf.squeeze().cpu(), global_step=global_step, sample_rate=vocoder.sample_rate)
+                        writer.add_audio(f"AR/wave_{i}",              wave_estim_ar.squeeze().cpu(), global_step=global_step, sample_rate=vocoder.sample_rate)
+                    ####################################################################
                 acoustic.train()
-
-                ############################################################################
-                # Log validation metrics
-                ############################
-
-                # Logging
                 if rank == 0:
-                    writer.add_scalar(
-                        "validation/loss",
-                        validation_loss.value,
-                        global_step,
-                    )
-                    logger.info(
-                        f"valid -- epoch: {epoch}, loss: {validation_loss.value:.4f}"
-                    )
+                    writer.add_scalar("validation/loss", validation_loss.value, global_step)
+                    logger.info(f"valid -- epoch: {epoch}, loss: {validation_loss.value:.4f}")
+
+                # Checkpointing
 
                 # Flag whether best val score or not
                 new_best: bool = best_loss > validation_loss.value
 
-                # `best_loss` value upadte
+                # `best_loss` value update
                 if new_best:
                     logger.info("-------- new best model found!")
                     best_loss = validation_loss.value
